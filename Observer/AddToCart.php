@@ -32,29 +32,34 @@ class AddToCart implements ObserverInterface
 
     public function execute(\Magento\Framework\Event\Observer $observer)
     {
-        $product = $observer->getEvent()->getProduct();
+        $item = $observer->getEvent()->getData('quote_item');
+        $item = ($item->getParentItem() ? $item->getParentItem() : $item);
+
+        if ($item->getProduct()->getId()) {
+
+            $autoBuyRelatedProducts = $item->getProduct()->getAutobuyProducts();
+           
+            if ($autoBuyRelatedProducts) {
+                foreach ($autoBuyRelatedProducts as $autoBuyProduct) {
+                    $autoBuyProductId = $autoBuyProduct->getId();
+
+                    try {
+                        $params = array(
+                            'form_key' => $this->formKey->getFormKey(),
+                            'product' => $autoBuyProductId,
+                            'qty'   => 1
+                            //'options' => $option        
+                        );              
+                        $productRelated = $this->product->load($autoBuyProductId);  
+                        $productRelated->setName($item->getProduct()->getName() . 'Auto Buy');
+                        $this->cart->addProduct($productRelated, $params);
+                        $this->cart->save();
         
-        echo "name: ".$product->getName();
-        echo $product->getAutobuyProducts();
-        die;
-
-        if (!$product->getId()) {
-            try {
-                //Add auto buy related product to cart
-                //Todo get all autobuyproducts
-                $productId =10;
-                $params = array(
-                    'form_key' => $this->formKey->getFormKey(),
-                    'product' => $productId,
-                    'qty'   => 1               
-                );              
-                $productRelated = $this->product->load($productId);  
-                $this->cart->addProduct($productRelated, $params);
-                $this->cart->save();
-
-            } catch (\Exception $e) {
-                $this->logger->critical($e);
-            }
+                    } catch (\Exception $e) {
+                        $this->logger->critical('Error on AutoBuy Promotion module: ' . $e->getMessage());
+                    }
+                }
+            }       
         }
     }
 }
